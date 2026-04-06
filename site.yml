@@ -1,0 +1,42 @@
+---
+- name: NetDevOps SSoT 프로비저닝 & 폐쇄 루프 검증 (Telnet/Web용)
+  hosts: legacy_telnet_switches
+  gather_facts: false
+  tasks:
+    - name: "Task 1: [배포] SSoT 변수 기반 인터페이스 동적 주입 (Telnet)"
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts:
+          - "#"
+        command:
+          - configure terminal
+          - "interface {{ item.name }}"
+          - "description {{ item.description }}"
+          - "ip address {{ item.ip }} {{ item.mask }}"
+          - "no shutdown"
+          - end
+          - write memory
+      loop: "{{ intent_interfaces | default([]) }}"
+      register: deploy_result
+
+    - name: "Task 2: [조회] OSPF 라우팅 상태 수집 (pyATS 파서 대체)"
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts:
+          - "#"
+        command:
+          - show ip ospf neighbor
+      register: ospf_output
+      
+    - name: "Task 3: [단언] 폐쇄 루프 검증 (FULL/2WAY 상태 확인)"
+      assert:
+        that: "'FULL' in ospf_output.stdout[0] or '2WAY' in ospf_output.stdout[0]"
+        success_msg: "[성공] OSPF 라우팅 정상 상태 확인!"
+        fail_msg: "[실패] OSPF 수렴 실패. 물리 링크나 설정을 확인하세요."
+      ignore_errors: true

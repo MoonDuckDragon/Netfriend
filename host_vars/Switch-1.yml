@@ -1,0 +1,10 @@
+---
+intent_interfaces:
+  - name: GigabitEthernet0/1
+    description: "UPLINK_TO_SWITCH_2"
+    ip: 10.0.0.11
+    mask: 255.255.255.0
+intent_ospf_networks:
+  - network: 10.0.0.0
+    wildcard: 0.0.0.255
+    area: 0

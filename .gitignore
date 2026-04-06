@@ -1,0 +1,9 @@
+# Python Virtual Environment
+.venv/
+__pycache__/
+
+# Ansible Collections (용량이 커서 제외, requirements로 대체)
+collections/
+
+# 민감한 정보 (비밀번호가 적힌 파일 등)
+# hosts 

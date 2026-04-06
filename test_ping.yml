@@ -1,0 +1,33 @@
+---
+# [PLAY 1] SSH 기종 응답 테스트
+- name: SSH 장비 연결 및 응답 테스트
+  hosts: crypto_switches
+  gather_facts: false
+  tasks:
+    - name: "SSH 모듈로 show privilege 전송"
+      cisco.ios.ios_command:
+        commands: "show privilege"
+      register: ssh_result
+
+    - name: "SSH 장비 응답 확인"
+      debug:
+        msg: "✅ [SSH] 정상 응답 수신! 결과: {{ ssh_result.stdout[0] }}"
+
+# [PLAY 2] Telnet 기종 응답 테스트
+- name: Telnet 장비 연결 및 응답 테스트
+  hosts: legacy_telnet_switches
+  gather_facts: false
+  tasks:
+    - name: "Telnet 모듈로 show privilege 전송"
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts: ["#"]
+        command: "show privilege"
+      register: telnet_result
+
+    - name: "Telnet 장비 응답 확인"
+      debug:
+        msg: "✅ [Telnet] 정상 응답 수신! 결과: {{ telnet_result.stdout[0] }}"

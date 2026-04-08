@@ -37,10 +37,9 @@
   hosts: modern_ssh_switches
   gather_facts: false
   tasks:
-    - name: "Task 1: [SSH Deploy] EIGRP AS 100 멱등성 주입 (모던 모듈)"
+    - name: "Task 1: [SSH Deploy] EIGRP AS 100 서열 강제 주입"
       cisco.ios.ios_config:
         lines:
+          - router eigrp 100
           - network 10.0.0.0
           - network 192.168.99.0
-        parents: router eigrp 100
-      register: eigrp_ssh

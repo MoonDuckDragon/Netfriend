@@ -37,9 +37,14 @@
   hosts: modern_ssh_switches
   gather_facts: false
   tasks:
-    - name: "Task 1: [SSH Deploy] EIGRP AS 100 서열 강제 주입"
+    - name: "Task 1: [SSH] L3 라우팅 엔진 강제 개방 (ip routing)"
       cisco.ios.ios_config:
         lines:
-          - router eigrp 100
+          - ip routing
+
+    - name: "Task 2: [SSH Deploy] EIGRP AS 100 정밀 주입 (부모-자식 강제 할당)"
+      cisco.ios.ios_config:
+        parents: router eigrp 100
+        lines:
           - network 10.0.0.0
           - network 192.168.99.0

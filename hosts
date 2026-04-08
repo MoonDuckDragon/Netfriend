@@ -9,3 +9,16 @@ Switch-8 ansible_host=10.254.254.18
 ansible_connection=local
 ansible_user=ansible
 ansible_password=1234
+
+[modern_ssh_switches]
+Switch-4 ansible_host=10.254.254.14
+Switch-5 ansible_host=10.254.254.15
+
+[modern_ssh_switches:vars]
+ansible_connection=network_cli
+ansible_network_os=cisco.ios
+ansible_user=ansible
+ansible_password=1234
+ansible_become=yes
+ansible_become_method=enable
+ansible_become_password=1234

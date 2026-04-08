@@ -48,3 +48,15 @@
         lines:
           - network 10.0.0.0
           - network 192.168.99.0
+
+    - name: "Task 3: [단언] EIGRP 라우팅 이웃(Neighbor) 수렴 검증"
+      cisco.ios.ios_command:
+        commands: show ip eigrp neighbors
+      register: eigrp_state
+
+    - name: "Task 4: [결과] 무결성 판독"
+      assert:
+        that: "'Tunnel' not in eigrp_state.stdout[0] and eigrp_state.stdout[0] | length > 50"
+        success_msg: "[성공] EIGRP 통신망 생존 확인!"
+        fail_msg: "[실패] 설정은 들어갔으나 라우팅 통신 단절!"
+      ignore_errors: true

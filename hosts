@@ -1,5 +1,4 @@
 [legacy_telnet_switches]
-Switch-1 ansible_host=10.254.254.11
 Switch-2 ansible_host=10.254.254.12
 Switch-3 ansible_host=10.254.254.13
 Switch-6 ansible_host=10.254.254.16

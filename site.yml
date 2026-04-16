@@ -72,6 +72,7 @@
         prompts:
           - "#"
         command:
+          - terminal length 0
           - show snmp user
           - show snmp group
       register: snmp_state

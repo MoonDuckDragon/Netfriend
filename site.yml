@@ -1,13 +1,21 @@
 ---
 # ================================================================
-# SNMP 배포 플레이북 (레거시 3대: SW2, SW6, SW8)
-#  Phase 1 : 기존 SNMP 잔재 제거 (멱등성)
-#  Phase 2 : v2c community 배포
-#  Phase 3 : v3 authNoPriv (SHA) 배포
-#  Phase 4 : show snmp user/group 으로 협상 결과 수집
+# [SNMP 배포 플레이북] 레거시 + K9 전 장비 대상
+#
+#  Play 1 : Telnet 구역 (SW2, SW6, SW8)
+#           → v2c + v3 authNoPriv (SHA)
+#
+#  Play 2 : SSH 구역 (SW4, SW5)
+#           → v2c + v3 authNoPriv (SHA) + v3 authPriv (SHA + AES-128)
+#
+#  ※ hosts 파일의 modern_ssh_switches 그룹에
+#    ansible_ssh_common_args 설정 필요 (아래 참고)
 # ================================================================
 
-- name: "SNMP 차등 배포 (Telnet 레거시 구역)"
+# ────────────────────────────────────────────────────
+# [PLAY 1] Telnet 레거시 구역 (SW2, SW6, SW8)
+# ────────────────────────────────────────────────────
+- name: "SNMP 배포 - Telnet 레거시 구역 (v2c + authNoPriv)"
   hosts: legacy_telnet_switches
   gather_facts: false
 
@@ -22,6 +30,7 @@
         prompts:
           - "#"
         command:
+          - terminal length 0
           - configure terminal
           - no snmp-server user mon_auth AUTHGRP v3
           - no snmp-server group AUTHGRP v3 auth
@@ -42,7 +51,7 @@
           - snmp-server community PUBKEY RO
           - end
 
-    - name: "Task 3: [Deploy-v3] authNoPriv 그룹/유저 생성 (SHA 시도)"
+    - name: "Task 3: [Deploy-v3] authNoPriv 그룹/유저 생성 (SHA)"
       ansible.netcommon.telnet:
         user: "{{ ansible_user }}"
         password: "{{ ansible_password }}"
@@ -56,10 +65,8 @@
           - snmp-server user mon_auth AUTHGRP v3 auth sha AuthPass123
           - end
           - write memory
-      register: v3_deploy
-      ignore_errors: true
 
-    - name: "Task 4: [Verify] show snmp user / group 수집"
+    - name: "Task 4: [Verify] SNMP 협상 결과 수집"
       ansible.netcommon.telnet:
         user: "{{ ansible_user }}"
         password: "{{ ansible_password }}"
@@ -72,8 +79,60 @@
           - show snmp user
           - show snmp group
       register: snmp_state
+
+    - name: "Task 5: [Result] 협상 결과 출력"
+      debug:
+        var: snmp_state.output
+
+
+# ────────────────────────────────────────────────────
+# [PLAY 2] SSH K9 구역 (SW4, SW5)
+#  → v2c + authNoPriv + authPriv (AES-128) 풀셋
+# ────────────────────────────────────────────────────
+- name: "SNMP 배포 - SSH K9 구역 (v2c + authNoPriv + authPriv)"
+  hosts: modern_ssh_switches
+  gather_facts: false
+
+  tasks:
+
+    - name: "Task 1: [Init] 기존 SNMP 설정 초기화"
+      cisco.ios.ios_config:
+        lines:
+          - no snmp-server user mon_auth AUTHGRP v3
+          - no snmp-server user mon_priv PRIVGRP v3
+          - no snmp-server group AUTHGRP v3 auth
+          - no snmp-server group PRIVGRP v3 priv
+          - no snmp-server community PUBKEY
       ignore_errors: true
 
-    - name: "Task 5: [Result] SNMP 협상 결과 판독"
+    - name: "Task 2: [Deploy-v2c] community string 주입"
+      cisco.ios.ios_config:
+        lines:
+          - snmp-server community PUBKEY RO
+
+    - name: "Task 3: [Deploy-v3] authNoPriv 그룹/유저 생성 (SHA)"
+      cisco.ios.ios_config:
+        lines:
+          - snmp-server group AUTHGRP v3 auth
+          - snmp-server user mon_auth AUTHGRP v3 auth sha AuthPass123
+
+    - name: "Task 4: [Deploy-v3] authPriv 그룹/유저 생성 (SHA + AES-128)"
+      cisco.ios.ios_config:
+        lines:
+          - snmp-server group PRIVGRP v3 priv
+          - snmp-server user mon_priv PRIVGRP v3 auth sha AuthPass123 priv aes 128 PrivPass123
+
+    - name: "Task 5: [Save] 설정 저장"
+      cisco.ios.ios_command:
+        commands: write memory
+
+    - name: "Task 6: [Verify] SNMP 협상 결과 수집"
+      cisco.ios.ios_command:
+        commands:
+          - show snmp user
+          - show snmp group
+      register: snmp_state
+
+    - name: "Task 7: [Result] 협상 결과 출력"
       debug:
         var: snmp_state.stdout_lines

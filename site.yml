@@ -59,11 +59,7 @@
       register: v3_deploy
       ignore_errors: true
 
-    - name: "Task 4: [Log] v3 배포 응답 출력"
-      debug:
-        msg: "{{ v3_deploy.output | default(['(출력 없음 — 명령 거부 가능)']) }}"
-
-    - name: "Task 5: [Verify] show snmp user / group 수집"
+    - name: "Task 4: [Verify] show snmp user / group 수집"
       ansible.netcommon.telnet:
         user: "{{ ansible_user }}"
         password: "{{ ansible_password }}"
@@ -78,6 +74,6 @@
       register: snmp_state
       ignore_errors: true
 
-    - name: "Task 6: [Result] SNMP 협상 결과 판독"
+    - name: "Task 5: [Result] SNMP 협상 결과 판독"
       debug:
         var: snmp_state.stdout_lines

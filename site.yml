@@ -1,62 +1,38 @@
----
-- name: NetDevOps 프로비저닝 (텔넷 구역 - EIGRP 초기화 및 멱등성 확보)
-  hosts: legacy_telnet_switches
+# snmp_deploy.yml
+- name: SNMP v2c + v3-authNoPriv 전체 배포
+  hosts: all
   gather_facts: false
   tasks:
-    - name: "Task 1: [Init] 기존 EIGRP 라우팅 파괴 (초기화)"
-      ansible.netcommon.telnet:
-        user: "{{ ansible_user }}"
-        password: "{{ ansible_password }}"
-        login_prompt: "Username: ?"
-        password_prompt: "Password: ?"
-        prompts:
-          - "#"
-        command:
-          - configure terminal
-          - "no router eigrp 100"
-          - end
-      ignore_errors: true
+    - name: [SSH] K9 장비에 snmp 설정
+      cisco.ios.ios_config:
+        lines:
+          - snmp-server community PUBKEY RO
+          - snmp-server group AUTHGRP v3 auth
+          - snmp-server user mon_auth AUTHGRP v3 auth sha AuthPass123
+      when: inventory_hostname in groups['modern_ssh_switches']
 
-    - name: "Task 2: [Deploy] EIGRP AS 100 강제 주입"
+    - name: [Telnet] 레거시 장비에 snmp 설정
       ansible.netcommon.telnet:
         user: "{{ ansible_user }}"
         password: "{{ ansible_password }}"
         login_prompt: "Username: ?"
         password_prompt: "Password: ?"
-        prompts:
-          - "#"
+        prompts: ["#"]
         command:
           - configure terminal
-          - router eigrp 100
-          - network 10.0.0.0
-          - network 192.168.99.0
+          - snmp-server community PUBKEY RO
+          - snmp-server group AUTHGRP v3 auth
+          - snmp-server user mon_auth AUTHGRP v3 auth sha AuthPass123
           - end
           - write memory
+      when: inventory_hostname in groups['legacy_telnet_switches']
 
-- name: NetDevOps 프로비저닝 (SSH 구역 - Switch 4, 5)
+- name: SNMP v3-authPriv 추가 배포 (K9 전용)
   hosts: modern_ssh_switches
   gather_facts: false
   tasks:
-    - name: "Task 1: [SSH] L3 라우팅 엔진 강제 개방 (ip routing)"
+    - name: AES-128 암호화 사용자 생성
       cisco.ios.ios_config:
         lines:
-          - ip routing
-
-    - name: "Task 2: [SSH Deploy] EIGRP AS 100 정밀 주입 (부모-자식 강제 할당)"
-      cisco.ios.ios_config:
-        parents: router eigrp 100
-        lines:
-          - network 10.0.0.0
-          - network 192.168.99.0
-
-    - name: "Task 3: [단언] EIGRP 라우팅 이웃(Neighbor) 수렴 검증"
-      cisco.ios.ios_command:
-        commands: show ip eigrp neighbors
-      register: eigrp_state
-
-    - name: "Task 4: [결과] 무결성 판독"
-      assert:
-        that: "'Tunnel' not in eigrp_state.stdout[0] and eigrp_state.stdout[0] | length > 50"
-        success_msg: "[성공] EIGRP 통신망 생존 확인!"
-        fail_msg: "[실패] 설정은 들어갔으나 라우팅 통신 단절!"
-      ignore_errors: true
+          - snmp-server group PRIVGRP v3 priv
+          - snmp-server user mon_priv PRIVGRP v3 auth sha AuthPass123 priv aes 128 PrivPass123

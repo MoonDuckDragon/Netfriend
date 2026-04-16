@@ -82,7 +82,7 @@
 
     - name: "Task 5: [Result] 협상 결과 출력"
       debug:
-        var: snmp_state.output
+        var: snmp_state.stdout
 
 
 # ────────────────────────────────────────────────────

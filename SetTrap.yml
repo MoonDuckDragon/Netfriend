@@ -8,7 +8,7 @@
         lines:
           - snmp-server community PUBKEY RO
           - snmp-server enable traps snmp linkdown linkup
-          - snmp-server host 10.254.254.1 version 2c PUBKEY
+          - snmp-server host 10.254.254.254 version 2c PUBKEY
     - name: "저장"
       cisco.ios.ios_command:
         commands: write memory
@@ -28,6 +28,6 @@
           - configure terminal
           - snmp-server community PUBKEY RO
           - snmp-server enable traps snmp linkdown linkup
-          - snmp-server host 10.254.254.1 version 2c PUBKEY
+          - snmp-server host 10.254.254.254 version 2c PUBKEY
           - end
           - write memory

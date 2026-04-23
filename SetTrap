@@ -1,0 +1,33 @@
+---
+- name: "Trap 설정 (SSH - K9)"
+  hosts: modern_ssh_switches
+  gather_facts: false
+  tasks:
+    - name: "Trap 활성화"
+      cisco.ios.ios_config:
+        lines:
+          - snmp-server community PUBKEY RO
+          - snmp-server enable traps snmp linkdown linkup
+          - snmp-server host 10.254.254.1 version 2c PUBKEY
+    - name: "저장"
+      cisco.ios.ios_command:
+        commands: write memory
+
+- name: "Trap 설정 (Telnet - SMI)"
+  hosts: legacy_telnet_switches
+  gather_facts: false
+  tasks:
+    - name: "Trap 활성화"
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts: ["#"]
+        command:
+          - configure terminal
+          - snmp-server community PUBKEY RO
+          - snmp-server enable traps snmp linkdown linkup
+          - snmp-server host 10.254.254.1 version 2c PUBKEY
+          - end
+          - write memory

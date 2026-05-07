@@ -25,6 +25,7 @@
     - name: "트렁크 포트 설정 (BB→DS, BB↔BB)"
       cisco.ios.ios_config:
         lines:
+          - switchport
           - switchport trunk encapsulation dot1q
           - switchport mode trunk
           - switchport trunk allowed vlan 99,500,510,520,530

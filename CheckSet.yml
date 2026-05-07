@@ -30,16 +30,9 @@
           - show spanning-tree summary
       register: telnet_output
 
-    - name: "Task 2: [Save] 수집된 결과를 로컬 텍스트 파일로 저장"
-      copy:
-        content: |
-          =========================================
-          [ {{ inventory_hostname }} Report ]
-          =========================================
-          
-          {{ telnet_output.stdout[1:] | join('\n\n=========================================\n\n') }}
-        dest: "./{{ inventory_hostname }}_report.txt"
-      delegate_to: localhost
+    - name: "Task 2: [Result] 화면에 출력하기"
+      debug:
+        msg: "{{ ssh_output.stdout | join('\n\n=========================================\n\n') }}"
 
 
 # ────────────────────────────────────────────────────
@@ -59,13 +52,6 @@
           - show spanning-tree summary
       register: ssh_output
 
-    - name: "Task 2: [Save] 수집된 결과를 로컬 텍스트 파일로 저장"
-      copy:
-        content: |
-          =========================================
-          [ {{ inventory_hostname }} Report ]
-          =========================================
-          
-          {{ ssh_output.stdout | join('\n\n=========================================\n\n') }}
-        dest: "./{{ inventory_hostname }}_report.txt"
-      delegate_to: localhost
+    - name: "Task 2: [Result] 화면에 출력하기"
+      debug:
+        msg: "{{ ssh_output.stdout | join('\n\n=========================================\n\n') }}"

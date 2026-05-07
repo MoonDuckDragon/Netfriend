@@ -30,7 +30,7 @@
           - show spanning-tree summary
       register: telnet_output
 
-- name: "Task 2: [Result] 화면에 출력하기"
+    - name: "Task 2: [Result] 화면에 출력하기"
       debug:
         var: telnet_output.stdout
 

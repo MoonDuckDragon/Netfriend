@@ -30,9 +30,9 @@
           - show spanning-tree summary
       register: telnet_output
 
-    - name: "Task 2: [Result] 화면에 출력하기"
+- name: "Task 2: [Result] 화면에 출력하기"
       debug:
-        msg: "{{ telnet_output.stdout[1:] | join('\n\n=========================================\n\n') }}"
+        var: telnet_output.stdout
 
 # ────────────────────────────────────────────────────
 # [PLAY 2] SSH K9 구역 (SW4, SW5)

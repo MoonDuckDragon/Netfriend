@@ -150,9 +150,13 @@
             const select = document.getElementById('vlanFilter');
             const currentVal = select.value;
             select.innerHTML = '<option value="all">전체 표시 (All)</option>';
-            select.innerHTML += '<option value="routed">라우팅 구간 (Router/L3)</option>';
+            select.innerHTML += '<option value="routed">라우팅 전체 (Router/L3)</option>';
             cachedTopology.vlans.forEach(v => {
-                select.innerHTML += `<option value="${v}">VLAN ${v}</option>`;
+                if (v.includes(".x")) {
+                    select.innerHTML += `<option value="${v}">IP 대역: ${v}</option>`;
+                } else {
+                    select.innerHTML += `<option value="${v}">VLAN ${v}</option>`;
+                }
             });
             select.value = currentVal || 'all';
         }
@@ -167,9 +171,11 @@
                 
                 if(filterVlan === 'all') {
                     if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
-                    for(let v in n.ip_map) if(v !== 'routed') filteredIps.push(n.ip_map[v]);
+                    for(let v in n.ip_map) if(v !== 'routed' && !v.includes('.x')) filteredIps.push(n.ip_map[v]);
                 } else if (filterVlan === 'routed') {
                     if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
+                } else if (filterVlan.includes('.x')) {
+                    if(n.ip_map[filterVlan]) filteredIps.push(...n.ip_map[filterVlan]);
                 } else {
                     if(n.ip_map[filterVlan]) filteredIps.push(n.ip_map[filterVlan]);
                 }
@@ -193,6 +199,13 @@
                 if(filterVlan === 'all') show = true;
                 else if (filterVlan === 'routed') {
                     if(e.vlan === 'routed') show = true;
+                } else if (filterVlan.includes('.x')) {
+                    // 특정 IP 대역 필터 시, 해당 대역 IP를 가진 노드 간의 링크만 표시
+                    const fromNode = cachedTopology.nodes.find(n => n.id === e.from);
+                    const toNode = cachedTopology.nodes.find(n => n.id === e.to);
+                    if (fromNode && toNode && fromNode.ip_map[filterVlan] && toNode.ip_map[filterVlan]) {
+                        show = true;
+                    }
                 } else {
                     if(e.vlan === filterVlan || e.vlan === 'trunk') show = true;
                 }
@@ -284,6 +297,7 @@
             if (nodeId) {
                 selectedElement = nodeId;
                 menuList.innerHTML += `<li onclick="actionNode('ping')">[${nodeId}] Ping 전송</li>`;
+                menuList.innerHTML += `<li onclick="actionNode('cdp')">[${nodeId}] CDP 상세 정보 보기</li>`;
                 menuList.innerHTML += `<li onclick="openCli('${nodeId}')">[${nodeId}] 터미널 콘솔 접속</li>`;
             } else if (edgeId) {
                 const edge = edges.get(edgeId);
@@ -314,6 +328,13 @@
                     fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: selectedElement, target: targetIP }) })
                     .then(res => res.json()).then(data => appendLog(data.message));
                 }
+            } else if (action === 'cdp') {
+                openCli(selectedElement);
+                setTimeout(() => {
+                    const inputEl = document.getElementById('cliInput');
+                    inputEl.value = 'show cdp neighbors detail';
+                    handleCliEnter({key: 'Enter'});
+                }, 300);
             }
         }
 

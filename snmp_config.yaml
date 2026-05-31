@@ -1,0 +1,36 @@
+# filename: snmp_config.yaml
+---
+# 에러 난 R3, R4, SW8 제외하고 통신 되는 애들만 지정
+- name: Deploy SNMP Trap Configuration
+  hosts: SW2,SW4,SW5,SW6
+  gather_facts: false
+  vars:
+    snmp_server_ip: "10.254.254.254"
+    snmp_port: 1162
+    community: "PUBKEY"
+  tasks:
+    - name: Configure SNMP Trap (SSH Devices)
+      cisco.ios.ios_config:
+        lines:
+          - "snmp-server host {{ snmp_server_ip | string }} version 2c {{ community | string }} udp-port {{ snmp_port | string }}"
+          - "snmp-server enable traps snmp linkdown linkup"
+          - "snmp-server community {{ community | string }} RO"
+      when: ansible_connection == 'network_cli'
+
+    - name: Configure SNMP Trap (Telnet Devices)
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user | string }}"
+        password: "{{ ansible_password | string }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts: ["[>#]"]
+        command:
+          - enable
+          - "{{ ansible_password | string }}"
+          - conf t
+          - "snmp-server host {{ snmp_server_ip | string }} version 2c {{ community | string }} udp-port {{ snmp_port | string }}"
+          - "snmp-server enable traps snmp linkdown linkup"
+          - "snmp-server community {{ community | string }} RO"
+          - end
+          - write memory
+      when: ansible_connection == 'local'

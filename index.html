@@ -49,7 +49,7 @@
         #cliInputArea {
             display: flex; padding: 10px; background: #2d2d2d; border-top: 1px solid #555; border-radius: 0 0 8px 8px;
         }
-        #cliPromptLabel { color: #f8f8f2; font-family: monospace; font-size: 14px; padding-top: 5px; margin-right: 5px;}
+        #cliPromptLabel { color: #f8f8f2; font-family: monospace; font-size: 14px; padding-top: 5px; margin-right: 5px; font-weight: bold;}
         #cliInput {
             flex-grow: 1; background: transparent; border: none; color: #f8f8f2;
             font-family: monospace; font-size: 14px; outline: none;
@@ -244,7 +244,7 @@
             currentCliDevice = deviceId;
             document.getElementById('cliModal').style.display = 'flex';
             document.getElementById('cliTitle').innerText = deviceId + " Console (SSH/Telnet)";
-            document.getElementById('cliPromptLabel').innerText = deviceId + "#";
+            document.getElementById('cliPromptLabel').innerText = "Loading...";
             
             if(!cliRecords[deviceId]) {
                 cliRecords[deviceId] = `Connected to ${deviceId}.\nType commands below.\n\n`;
@@ -252,7 +252,19 @@
             const historyDiv = document.getElementById('cliHistory');
             historyDiv.innerText = cliRecords[deviceId];
             historyDiv.scrollTop = historyDiv.scrollHeight;
-            setTimeout(() => document.getElementById('cliInput').focus(), 100);
+            
+            // 초기 접속 시 장비 프롬프트 실시간 확인
+            fetch('/api/cli', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_device: deviceId, command: "" })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('cliPromptLabel').innerText = data.prompt ? data.prompt : (deviceId + "#");
+            });
+
+            setTimeout(() => document.getElementById('cliInput').focus(), 300);
         }
 
         function closeCli() {
@@ -267,7 +279,9 @@
                 inputEl.value = '';
                 
                 const historyDiv = document.getElementById('cliHistory');
-                cliRecords[currentCliDevice] += `${currentCliDevice}# ${cmd}\n`;
+                const currentPrompt = document.getElementById('cliPromptLabel').innerText;
+                
+                cliRecords[currentCliDevice] += `${currentPrompt} ${cmd}\n`;
                 historyDiv.innerText = cliRecords[currentCliDevice];
                 historyDiv.scrollTop = historyDiv.scrollHeight;
                 
@@ -281,7 +295,9 @@
                 .then(res => res.json())
                 .then(data => {
                     const out = data.output ? data.output : data.message;
-                    cliRecords[currentCliDevice] += out + "\n";
+                    if(out) cliRecords[currentCliDevice] += out + "\n";
+                    if(data.prompt) document.getElementById('cliPromptLabel').innerText = data.prompt;
+                    
                     historyDiv.innerText = cliRecords[currentCliDevice];
                     historyDiv.scrollTop = historyDiv.scrollHeight;
                 }).catch(err => {
@@ -347,7 +363,7 @@
                     const inputEl = document.getElementById('cliInput');
                     inputEl.value = 'show cdp neighbors detail';
                     handleCliEnter({key: 'Enter'});
-                }, 300);
+                }, 500);
             }
         }
 

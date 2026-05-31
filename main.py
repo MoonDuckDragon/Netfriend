@@ -14,7 +14,7 @@ import threading
 app = FastAPI()
 active_websockets = set()
 DEVICE_PORT_STATES = {}
-TOPOLOGY_CACHE = {"nodes": [], "edges": [], "log": "서버 초기화 중... 잠시 후 다시 시도하세요.", "vlans": []}
+TOPOLOGY_CACHE = {"nodes": [], "edges": [], "log": "서버 초기화 중... 잠시 후 다시 시도하세요.", "vlans": [], "subnets": []}
 
 class PingReq(BaseModel):
     source: str
@@ -86,12 +86,12 @@ def perform_discovery():
     edge_tracker = set()
     full_status_log = ""
     all_vlans = set()
+    all_subnets = set()
     
     for hostname in DEVICE_INFO.keys():
         try:
             connection = get_connection(hostname)
             
-            # 1. IP & VLAN 정보 추출
             ip_out = connection.send_command("show ip interface brief")
             full_status_log += f"\n[{hostname} 포트 상태]\n{ip_out}\n"
             
@@ -107,9 +107,15 @@ def perform_discovery():
                             ip_map[vlan_id] = ip
                             all_vlans.add(vlan_id)
                         elif "Loopback" not in intf:
+                            ip_parts = ip.split(".")
+                            if len(ip_parts) == 4:
+                                subnet = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.x"
+                                if subnet not in ip_map:
+                                    ip_map[subnet] = []
+                                ip_map[subnet].append(ip)
+                                all_subnets.add(subnet)
                             ip_map["routed"].append(ip)
 
-            # 2. 포트별 VLAN 속성 추출 (Switch 전용)
             vlan_map = {}
             if hostname not in ["R3", "R4"]:
                 status_out = connection.send_command("show interface status")
@@ -118,7 +124,7 @@ def perform_discovery():
                     if match:
                         port = match.group(1)
                         vlan_str = match.group(3)
-                        vlan_map[port] = vlan_str # '10', 'trunk', 'routed' 등
+                        vlan_map[port] = vlan_str
                         if vlan_str.isdigit():
                             all_vlans.add(vlan_str)
             
@@ -128,7 +134,6 @@ def perform_discovery():
                 "type": "router" if hostname in ["R3", "R4"] else "switch"
             }
             
-            # 3. CDP 연결 추출
             cdp_out = connection.send_command("show cdp neighbors detail")
             connection.disconnect()
             
@@ -153,7 +158,6 @@ def perform_discovery():
                             if link_pair not in edge_tracker:
                                 edge_tracker.add(link_pair)
                                 
-                                # 라우터거나 매핑 안된 포트는 공통(routed) 처리
                                 link_vlan = "routed" if hostname in ["R3", "R4"] else vlan_map.get(local_port, "routed")
                                 
                                 discovered_edges.append({
@@ -168,7 +172,8 @@ def perform_discovery():
             
     nodes_list = list(discovered_nodes.values())
     vlans_list = sorted(list(all_vlans), key=lambda x: int(x) if x.isdigit() else 999)
-    return {"nodes": nodes_list, "edges": discovered_edges, "log": full_status_log, "vlans": vlans_list}
+    subnets_list = sorted(list(all_subnets))
+    return {"nodes": nodes_list, "edges": discovered_edges, "log": full_status_log, "vlans": vlans_list, "subnets": subnets_list}
 
 async def init_system_cache():
     print("[System] 서버 시작: 포트 상태 캐싱 중...")

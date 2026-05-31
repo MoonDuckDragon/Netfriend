@@ -1,0 +1,28 @@
+# filename: port_restore.yaml
+---
+- name: No Shutdown Target Port
+  hosts: "{{ target_device | string }}"
+  gather_facts: false
+  tasks:
+    - name: Port Restore (SSH 기종)
+      cisco.ios.ios_config:
+        lines:
+          - no shutdown
+        parents: interface {{ target_port | string }}
+      when: ansible_connection == 'network_cli'
+
+    - name: Port Restore (Telnet 기종)
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user | string }}"
+        password: "{{ ansible_password | string }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts: ["[>#]"]
+        command:
+          - enable
+          - "{{ ansible_password | string }}"
+          - conf t
+          - interface {{ target_port | string }}
+          - no shutdown
+          - end
+      when: ansible_connection == 'local'

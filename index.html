@@ -173,10 +173,13 @@
                     for(let v in n.ip_map) if(v !== 'routed') allIps.push(n.ip_map[v]);
                     ipDisplay = allIps.join('\n');
                 } else {
-                    // 필터된 VLAN IP + 라우팅 IP(공통)
+                    // 특정 VLAN 필터링 시
                     let filteredIps = [];
-                    if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
+                    // 선택된 VLAN IP 추가 (스위치/라우터 불문)
                     if(n.ip_map[filterVlan]) filteredIps.push(n.ip_map[filterVlan]);
+                    // 라우터의 경우 공통 구간(routed) IP 유지
+                    if(n.type === 'router' && n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
+                    
                     ipDisplay = filteredIps.join('\n');
                 }
 

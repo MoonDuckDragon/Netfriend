@@ -32,7 +32,6 @@
         #contextMenu li { padding: 8px 15px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #eee; }
         #contextMenu li:hover { background: #007bff; color: white; }
 
-        /* 터미널(CLI) 모달 창 */
         #cliModal {
             display: none; position: fixed; top: 10%; left: 20%; width: 60%; height: 70%;
             background: #1e1e1e; border: 2px solid #555; border-radius: 8px; z-index: 9999;
@@ -62,9 +61,10 @@
     <div class="control-panel">
         <button class="btn-instant" onclick="discoverFullNetwork()">망 토폴로지 조회 (즉시)</button>
         <button class="btn-refresh" onclick="refreshNetwork()">강제 새로고침 (오래 걸림)</button>
-        <label for="vlanFilter">VLAN 필터: </label>
+        <label for="vlanFilter">필터: </label>
         <select id="vlanFilter" onchange="applyFilter()">
             <option value="all">전체 표시 (All)</option>
+            <option value="routed">라우팅 구간 (Router/L3)</option>
         </select>
     </div>
     
@@ -79,7 +79,6 @@
         <ul id="menuList"></ul>
     </div>
 
-    <!-- CLI 콘솔 모달 -->
     <div id="cliModal">
         <div id="cliHeader">
             <span id="cliTitle">Terminal</span>
@@ -107,10 +106,10 @@
             const host = window.location.host || '127.0.0.1:8000';
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(wsProtocol + '//' + host + '/ws');
-            ws.onopen = function() { appendLog("[System] 서버 통신(웹소켓) 연결 완료. SNMP 이벤트 대기 중..."); };
+            ws.onopen = function() { appendLog("[System] 서버 통신 연결 완료."); };
             ws.onmessage = function(event) { appendLog(event.data); };
-            ws.onclose = function() { appendLog("[System] 웹소켓 끊어짐. 서버 켜져 있는지 확인."); };
-            ws.onerror = function(err) { appendLog("[System] 웹소켓 에러 발생."); };
+            ws.onclose = function() { appendLog("[System] 웹소켓 끊어짐."); };
+            ws.onerror = function(err) { appendLog("[System] 웹소켓 에러."); };
         } catch (error) {
             appendLog("웹소켓 에러: " + error);
         }
@@ -131,19 +130,19 @@
         let cachedTopology = null;
 
         function discoverFullNetwork() {
-            appendLog("[System] 망 토폴로지 조회 중... (캐시 읽기)");
+            appendLog("[System] 망 토폴로지 조회 중...");
             fetch('/api/discover')
             .then(res => res.json())
             .then(data => { cachedTopology = data; updateFilterOptions(); applyFilter(); })
-            .catch(err => alert("조회 중 오류 발생: " + err));
+            .catch(err => alert("조회 에러: " + err));
         }
 
         function refreshNetwork() {
-            appendLog("[System] 강제 새로고침 시작. CDP 재수집 중...");
+            appendLog("[System] 강제 새로고침 시작...");
             fetch('/api/discover/refresh', { method: 'POST' })
             .then(res => res.json())
             .then(data => { cachedTopology = data; updateFilterOptions(); applyFilter(); })
-            .catch(err => alert("새로고침 중 오류 발생: " + err));
+            .catch(err => alert("새로고침 에러: " + err));
         }
 
         function updateFilterOptions() {
@@ -151,6 +150,7 @@
             const select = document.getElementById('vlanFilter');
             const currentVal = select.value;
             select.innerHTML = '<option value="all">전체 표시 (All)</option>';
+            select.innerHTML += '<option value="routed">라우팅 구간 (Router/L3)</option>';
             cachedTopology.vlans.forEach(v => {
                 select.innerHTML += `<option value="${v}">VLAN ${v}</option>`;
             });
@@ -158,30 +158,23 @@
         }
 
         function applyFilter() {
-            if(!cachedTopology || !cachedTopology.nodes || cachedTopology.nodes.length === 0) {
-                appendLog("[System] 데이터 없음. 서버 초기화 대기."); return;
-            }
+            if(!cachedTopology || !cachedTopology.nodes || cachedTopology.nodes.length === 0) return;
             const filterVlan = document.getElementById('vlanFilter').value;
             
             var nodeUpdates = [];
             cachedTopology.nodes.forEach(n => {
-                let ipDisplay = "";
+                let filteredIps = [];
+                
                 if(filterVlan === 'all') {
-                    // 전체 IP 출력
-                    let allIps = [];
-                    if(n.ip_map.routed) allIps.push(...n.ip_map.routed);
-                    for(let v in n.ip_map) if(v !== 'routed') allIps.push(n.ip_map[v]);
-                    ipDisplay = allIps.join('\n');
+                    if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
+                    for(let v in n.ip_map) if(v !== 'routed') filteredIps.push(n.ip_map[v]);
+                } else if (filterVlan === 'routed') {
+                    if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
                 } else {
-                    // 특정 VLAN 필터링 시
-                    let filteredIps = [];
-                    // 선택된 VLAN IP 추가 (스위치/라우터 불문)
                     if(n.ip_map[filterVlan]) filteredIps.push(n.ip_map[filterVlan]);
-                    // 라우터의 경우 공통 구간(routed) IP 유지
-                    if(n.type === 'router' && n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
-                    
-                    ipDisplay = filteredIps.join('\n');
                 }
+
+                let ipDisplay = filteredIps.join('\n');
 
                 nodeUpdates.push({
                     id: n.id, 
@@ -196,11 +189,13 @@
 
             var edgeUpdates = [];
             cachedTopology.edges.forEach((e, idx) => {
-                // 트렁크, 라우팅 구간은 무조건 표시. 특정 VLAN이면 해당 VLAN만 표시.
                 let show = false;
                 if(filterVlan === 'all') show = true;
-                else if(e.vlan === 'trunk' || e.vlan === 'routed') show = true;
-                else if(e.vlan === filterVlan) show = true;
+                else if (filterVlan === 'routed') {
+                    if(e.vlan === 'routed') show = true;
+                } else {
+                    if(e.vlan === filterVlan || e.vlan === 'trunk') show = true;
+                }
                 
                 if(show) {
                     edgeUpdates.push({
@@ -216,7 +211,6 @@
             setTimeout(() => { network.setOptions({ physics: false }); }, 1000);
         }
 
-        // --- 터미널(CLI) 관련 ---
         let currentCliDevice = null;
         let cliRecords = {};
 
@@ -272,7 +266,6 @@
             }
         }
 
-        // --- 우클릭 메뉴 ---
         let selectedElement = null;
 
         network.on("click", function () {
@@ -290,7 +283,7 @@
 
             if (nodeId) {
                 selectedElement = nodeId;
-                menuList.innerHTML += `<li onclick="actionNode('ping')">[${nodeId}] Ping 전송 (백그라운드)</li>`;
+                menuList.innerHTML += `<li onclick="actionNode('ping')">[${nodeId}] Ping 전송</li>`;
                 menuList.innerHTML += `<li onclick="openCli('${nodeId}')">[${nodeId}] 터미널 콘솔 접속</li>`;
             } else if (edgeId) {
                 const edge = edges.get(edgeId);

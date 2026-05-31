@@ -16,6 +16,9 @@ active_websockets = set()
 DEVICE_PORT_STATES = {}
 TOPOLOGY_CACHE = {"nodes": [], "edges": [], "log": "서버 초기화 중... 잠시 후 다시 시도하세요.", "vlans": [], "subnets": []}
 
+# CLI용 영구 SSH 세션 저장소 (상태 유지용)
+ACTIVE_CONNECTIONS = {}
+
 class PingReq(BaseModel):
     source: str
     target: str
@@ -44,6 +47,18 @@ def get_connection(hostname):
         jump_cmd = f"sshpass -p '1234' ssh -o StrictHostKeyChecking=no -p 2222 -W {dev['host']}:22 vboxuser@10.0.2.2"
         dev["sock"] = paramiko.ProxyCommand(jump_cmd)
     return ConnectHandler(**dev)
+
+def get_active_connection(hostname):
+    if hostname in ACTIVE_CONNECTIONS:
+        try:
+            conn = ACTIVE_CONNECTIONS[hostname]
+            if conn.is_alive():
+                return conn
+        except:
+            pass
+    conn = get_connection(hostname)
+    ACTIVE_CONNECTIONS[hostname] = conn
+    return conn
 
 def fetch_port_state(hostname):
     conn = get_connection(hostname)
@@ -313,10 +328,19 @@ def do_cli(req: CliReq):
     if req.target_device not in DEVICE_INFO:
         return {"status": "error", "message": "장비 정보 없음"}
     try:
-        connection = get_connection(req.target_device)
-        output = connection.send_command(req.command)
-        connection.disconnect()
-        return {"status": "success", "message": f"실행 완료", "output": output}
+        # 영구 연결 가져오기 (없으면 새로 생성)
+        conn = get_active_connection(req.target_device)
+        
+        # 타이밍 기반 명령 전송 (프롬프트 변경 대응)
+        if req.command.strip():
+            output = conn.send_command_timing(req.command)
+        else:
+            output = ""
+            
+        # 실제 프롬프트 동적 파싱 (예: Switch-8(config)#)
+        prompt = conn.find_prompt()
+        
+        return {"status": "success", "output": output, "prompt": prompt}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

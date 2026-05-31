@@ -62,11 +62,9 @@
         <button class="btn-instant" onclick="discoverFullNetwork()">망 토폴로지 조회 (즉시)</button>
         <button class="btn-refresh" onclick="refreshNetwork()">강제 새로고침 (오래 걸림)</button>
         
-        <!-- 필터 2개로 분리 -->
         <label for="vlanFilter">VLAN 필터(스위치): </label>
         <select id="vlanFilter" onchange="applyFilter()">
             <option value="all">전체 표시 (All)</option>
-            <option value="routed">라우팅 구간 (L3)</option>
         </select>
 
         <label for="routerFilter" style="margin-left: 10px;">라우터 필터(IP대역): </label>
@@ -153,7 +151,7 @@
         }
 
         function updateFilterOptions() {
-            if(!cachedTopology || !cachedTopology.vlans) return;
+            if(!cachedTopology) return;
             const vlanSelect = document.getElementById('vlanFilter');
             const routerSelect = document.getElementById('routerFilter');
             
@@ -161,16 +159,18 @@
             const currentRouter = routerSelect.value;
             
             vlanSelect.innerHTML = '<option value="all">전체 표시 (All)</option>';
-            vlanSelect.innerHTML += '<option value="routed">라우팅 구간 (L3)</option>';
             routerSelect.innerHTML = '<option value="all">전체 표시 (All)</option>';
 
-            cachedTopology.vlans.forEach(v => {
-                if (v.includes(".x")) {
-                    routerSelect.innerHTML += `<option value="${v}">IP 대역: ${v}</option>`;
-                } else {
+            if (cachedTopology.vlans) {
+                cachedTopology.vlans.forEach(v => {
                     vlanSelect.innerHTML += `<option value="${v}">VLAN ${v}</option>`;
-                }
-            });
+                });
+            }
+            if (cachedTopology.subnets) {
+                cachedTopology.subnets.forEach(s => {
+                    routerSelect.innerHTML += `<option value="${s}">대역: ${s}</option>`;
+                });
+            }
             
             vlanSelect.value = currentVlan || 'all';
             routerSelect.value = currentRouter || 'all';
@@ -186,25 +186,20 @@
                 let filteredIps = [];
                 
                 if (n.type === 'router') {
-                    // 라우터: 라우터 필터만 확인
                     if (filterRouter === 'all') {
                         if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
                     } else {
                         if(n.ip_map[filterRouter]) filteredIps.push(...n.ip_map[filterRouter]);
                     }
                 } else {
-                    // 스위치: VLAN 필터만 확인
                     if (filterVlan === 'all') {
                         if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
                         for(let v in n.ip_map) if(v !== 'routed' && !v.includes('.x')) filteredIps.push(n.ip_map[v]);
-                    } else if (filterVlan === 'routed') {
-                        if(n.ip_map.routed) filteredIps.push(...n.ip_map.routed);
                     } else {
                         if(n.ip_map[filterVlan]) filteredIps.push(n.ip_map[filterVlan]);
                     }
                 }
 
-                // 중복 제거 및 표시 포맷
                 filteredIps = [...new Set(filteredIps)];
                 let ipDisplay = filteredIps.join('\n');
 
@@ -223,12 +218,9 @@
             cachedTopology.edges.forEach((e, idx) => {
                 let show = false;
                 
-                // 엣지 표시는 VLAN 필터 우선 기준 (트렁크, 라우팅 등)
                 if(filterVlan === 'all') show = true;
-                else if (filterVlan === 'routed') {
-                    if(e.vlan === 'routed') show = true;
-                } else {
-                    if(e.vlan === filterVlan || e.vlan === 'trunk') show = true;
+                else {
+                    if(e.vlan === filterVlan || e.vlan === 'trunk' || e.vlan === 'routed') show = true;
                 }
                 
                 if(show) {

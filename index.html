@@ -61,6 +61,7 @@
     <div class="control-panel">
         <button class="btn-instant" onclick="discoverFullNetwork()">망 토폴로지 조회 (즉시)</button>
         <button class="btn-refresh" onclick="refreshNetwork()">강제 새로고침 (오래 걸림)</button>
+        <button class="btn-instant" onclick="applySSoT()" style="background: #e67e22;">VLAN 500 SSoT 배포</button>
         
         <label for="vlanFilter">VLAN 필터(스위치): </label>
         <select id="vlanFilter" onchange="applyFilter()">
@@ -148,6 +149,16 @@
             .then(res => res.json())
             .then(data => { cachedTopology = data; updateFilterOptions(); applyFilter(); })
             .catch(err => alert("새로고침 에러: " + err));
+        }
+
+        function applySSoT() {
+            appendLog("[System] SSoT 기반 VLAN 500 설정 배포 중...");
+            fetch('/api/ssot/vlan500', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                appendLog(data.message + '\n' + (data.output || ''));
+            })
+            .catch(err => alert("SSoT 배포 에러: " + err));
         }
 
         function updateFilterOptions() {

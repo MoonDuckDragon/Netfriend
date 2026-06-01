@@ -10,6 +10,7 @@ import json
 import re
 import socket
 import threading
+import os
 
 app = FastAPI()
 active_websockets = set()
@@ -142,11 +143,22 @@ def perform_discovery():
                         vlan_map[port] = vlan_str
                         if vlan_str.isdigit():
                             all_vlans.add(vlan_str)
+                            
+            # 라우팅 프로토콜 추출
+            routing_protocols = []
+            try:
+                proto_out = connection.send_command("show ip protocols")
+                if "ospf" in proto_out.lower(): routing_protocols.append("OSPF")
+                if "rip" in proto_out.lower(): routing_protocols.append("RIP")
+                if "eigrp" in proto_out.lower(): routing_protocols.append("EIGRP")
+            except:
+                pass
             
             discovered_nodes[hostname] = {
                 "id": hostname,
                 "ip_map": ip_map,
-                "type": "router" if hostname in ["R3", "R4"] else "switch"
+                "type": "router" if hostname in ["R3", "R4"] else "switch",
+                "routing": routing_protocols
             }
             
             cdp_out = connection.send_command("show cdp neighbors detail")
@@ -167,7 +179,7 @@ def perform_discovery():
                         
                         if target_dev and local_port and remote_port:
                             if target_dev not in discovered_nodes:
-                                discovered_nodes[target_dev] = {"id": target_dev, "ip_map": {"routed":[]}, "type": "unknown"}
+                                discovered_nodes[target_dev] = {"id": target_dev, "ip_map": {"routed":[]}, "type": "unknown", "routing": []}
                             
                             link_pair = tuple(sorted([hostname, target_dev]))
                             if link_pair not in edge_tracker:
@@ -288,11 +300,16 @@ def run_ansible(playbook: str, extra_vars: dict = None):
     cmd = ["ansible-playbook", "-i", "inventory.yaml", playbook]
     if extra_vars:
         cmd.extend(["--extra-vars", json.dumps(extra_vars)])
+        
+    env = os.environ.copy()
+    env["ANSIBLE_DEPRECATION_WARNINGS"] = "False"
+    
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
         return {"status": "success", "message": "실행 완료", "output": result.stdout}
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": "Ansible 에러", "output": e.stderr or e.stdout}
+        out_msg = (e.stdout or "") + "\n" + (e.stderr or "")
+        return {"status": "error", "message": "Ansible 에러", "output": out_msg.strip()}
 
 @app.get("/")
 def read_root():
@@ -318,7 +335,6 @@ def do_ping(req: PingReq):
     try:
         conn = get_active_connection(req.source)
         
-        # VLAN 필터 적용 시 출발지 인터페이스 강제 지정 (스위치 한정)
         cmd = f"ping {req.target} repeat 3"
         if req.vlan and req.vlan.isdigit() and req.source not in ["R3", "R4"]:
             cmd += f" source Vlan{req.vlan}"

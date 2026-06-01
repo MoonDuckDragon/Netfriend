@@ -16,12 +16,12 @@ active_websockets = set()
 DEVICE_PORT_STATES = {}
 TOPOLOGY_CACHE = {"nodes": [], "edges": [], "log": "서버 초기화 중... 잠시 후 다시 시도하세요.", "vlans": [], "subnets": []}
 
-# CLI용 영구 SSH 세션 저장소 (상태 유지용)
 ACTIVE_CONNECTIONS = {}
 
 class PingReq(BaseModel):
     source: str
     target: str
+    vlan: str = None
 
 class PortReq(BaseModel):
     target_device: str
@@ -316,10 +316,15 @@ def do_ping(req: PingReq):
     if req.source not in DEVICE_INFO:
         return {"status": "error", "message": "장비 정보 없음"}
     try:
-        connection = get_connection(req.source)
-        output = connection.send_command(f"ping {req.target} repeat 3")
-        connection.disconnect()
-        return {"status": "success", "message": f"Ping 결과:\n{output}"}
+        conn = get_active_connection(req.source)
+        
+        # VLAN 필터 적용 시 출발지 인터페이스 강제 지정 (스위치 한정)
+        cmd = f"ping {req.target} repeat 3"
+        if req.vlan and req.vlan.isdigit() and req.source not in ["R3", "R4"]:
+            cmd += f" source Vlan{req.vlan}"
+            
+        output = conn.send_command(cmd)
+        return {"status": "success", "message": f"Ping 결과 ({req.source}):\n{output}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -328,18 +333,12 @@ def do_cli(req: CliReq):
     if req.target_device not in DEVICE_INFO:
         return {"status": "error", "message": "장비 정보 없음"}
     try:
-        # 영구 연결 가져오기 (없으면 새로 생성)
         conn = get_active_connection(req.target_device)
-        
-        # 타이밍 기반 명령 전송 (프롬프트 변경 대응)
         if req.command.strip():
             output = conn.send_command_timing(req.command)
         else:
             output = ""
-            
-        # 실제 프롬프트 동적 파싱 (예: Switch-8(config)#)
         prompt = conn.find_prompt()
-        
         return {"status": "success", "output": output, "prompt": prompt}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -353,3 +352,7 @@ def do_shutdown(req: PortReq):
 def do_restore(req: PortReq):
     vars = {"target_device": req.target_device, "target_port": req.target_port}
     return run_ansible("port_restore.yaml", vars)
+
+@app.post("/api/ssot/vlan500")
+def do_ssot_vlan500():
+    return run_ansible("ssot_apply.yaml")

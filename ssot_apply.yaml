@@ -1,0 +1,75 @@
+# filename: ssot_apply.yaml
+---
+- name: Apply SSoT using Jinja2
+  hosts: SW2,SW4,SW5,SW6,SW8
+  gather_facts: false
+  vars_files:
+    - vlan500_intent.yaml
+
+  tasks:
+    - name: Build command list with Jinja2
+      set_fact:
+        cmd_json: >-
+          {%- set cmds = [] -%}
+          {%- set _ = cmds.append('vlan ' ~ vlan.id | string) -%}
+          {%- set _ = cmds.append('name ' ~ vlan.name) -%}
+          {%- set _ = cmds.append('interface Vlan' ~ vlan.id | string) -%}
+          {%- if inventory_hostname in core_switches | default({}) -%}
+            {%- set dev = core_switches[inventory_hostname] -%}
+            {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+            {%- set _ = cmds.append('no shutdown') -%}
+            {%- if dev.routing_protocols.ospf is defined -%}
+              {%- set _ = cmds.append('router ospf ' ~ dev.routing_protocols.ospf.process_id | string) -%}
+              {%- for net in dev.routing_protocols.ospf.networks -%}
+                {%- set _ = cmds.append('network ' ~ net ~ ' area ' ~ dev.routing_protocols.ospf.area | string) -%}
+              {%- endfor -%}
+              {%- if dev.redistribute | default(false) -%}
+                {%- set _ = cmds.append('redistribute rip subnets') -%}
+              {%- endif -%}
+            {%- endif -%}
+            {%- if dev.routing_protocols.rip is defined -%}
+              {%- set _ = cmds.append('router rip') -%}
+              {%- set _ = cmds.append('version ' ~ dev.routing_protocols.rip.version | string) -%}
+              {%- for net in dev.routing_protocols.rip.networks -%}
+                {%- set _ = cmds.append('network ' ~ net) -%}
+              {%- endfor -%}
+              {%- if dev.redistribute | default(false) -%}
+                {%- set _ = cmds.append('redistribute ospf 1 metric 2') -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- elif inventory_hostname in distribution_switches | default({}) -%}
+            {%- set dev = distribution_switches[inventory_hostname] -%}
+            {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+            {%- set _ = cmds.append('no shutdown') -%}
+            {%- if dev.routing_protocols.rip is defined -%}
+              {%- set _ = cmds.append('router rip') -%}
+              {%- set _ = cmds.append('version ' ~ dev.routing_protocols.rip.version | string) -%}
+              {%- for net in dev.routing_protocols.rip.networks -%}
+                {%- set _ = cmds.append('network ' ~ net) -%}
+              {%- endfor -%}
+            {%- endif -%}
+          {%- elif inventory_hostname in access_switches | default({}) -%}
+            {%- set dev = access_switches[inventory_hostname] -%}
+            {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+            {%- set _ = cmds.append('no shutdown') -%}
+          {%- endif -%}
+          {{ cmds | to_json }}
+
+    - name: Parse JSON to List
+      set_fact:
+        cmd_list: "{{ cmd_json | from_json }}"
+
+    - name: Apply SSH config
+      cisco.ios.ios_config:
+        lines: "{{ cmd_list }}"
+      when: ansible_connection == 'network_cli'
+
+    - name: Apply Telnet config
+      ansible.netcommon.telnet:
+        user: "{{ ansible_user | string }}"
+        password: "{{ ansible_password | string }}"
+        login_prompt: "Username: ?"
+        password_prompt: "Password: ?"
+        prompts: ["[>#]"]
+        command: "{{ ['enable', ansible_password | string, 'conf t'] + cmd_list + ['end', 'write memory'] }}"
+      when: ansible_connection == 'local'

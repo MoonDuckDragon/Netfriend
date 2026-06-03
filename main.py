@@ -11,6 +11,7 @@ import re
 import socket
 import threading
 import os
+import time
 
 app = FastAPI()
 active_websockets = set()
@@ -39,7 +40,7 @@ DEVICE_INFO = {
     "SW5": {"device_type": "cisco_ios", "host": "10.254.254.15", "username": "ansible", "password": "1234"},
     "SW2": {"device_type": "cisco_ios_telnet", "host": "10.254.254.12", "username": "ansible", "password": "1234"},
     "SW6": {"device_type": "cisco_ios_telnet", "host": "10.254.254.16", "username": "ansible", "password": "1234"},
-    "SW8": {"device_type": "cisco_ios_telnet", "host": "10.254.254.18", "username": "ansible", "password": "1234"}
+    "SW8": {"device_type": "cisco_ios_telnet", "host": "192.168.40.18", "username": "ansible", "password": "1234"}
 }
 
 def get_connection(hostname):
@@ -144,7 +145,6 @@ def perform_discovery():
                         if vlan_str.isdigit():
                             all_vlans.add(vlan_str)
                             
-            # 라우팅 프로토콜 추출
             routing_protocols = []
             try:
                 proto_out = connection.send_command("show ip protocols")
@@ -350,12 +350,25 @@ def do_cli(req: CliReq):
         return {"status": "error", "message": "장비 정보 없음"}
     try:
         conn = get_active_connection(req.target_device)
-        if req.command.strip():
-            output = conn.send_command_timing(req.command)
+        cmd = req.command.strip()
+        
+        if cmd:
+            output = conn.send_command_timing(cmd, strip_command=True, strip_prompt=True)
+            output = output.replace('^@', '').replace('\x00', '')
+            
+            # 입력한 명령어가 출력 앞에 붙어나오면 제거
+            if output.startswith(cmd):
+                output = output[len(cmd):].lstrip()
         else:
+            conn.write_channel('\n')
+            time.sleep(0.1)
             output = ""
+            
         prompt = conn.find_prompt()
-        return {"status": "success", "output": output, "prompt": prompt}
+        if prompt:
+            prompt = prompt.replace('^@', '').replace('\x00', '')
+            
+        return {"status": "success", "output": output.strip(), "prompt": prompt}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

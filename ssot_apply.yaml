@@ -14,56 +14,55 @@
           {%- if inventory_hostname == dhcp_server.hostname -%}
             {%- set _ = cmds.append('ip dhcp excluded-address ' ~ dhcp_server.exclude_start ~ ' ' ~ dhcp_server.exclude_end) -%}
             {%- set _ = cmds.append('ip dhcp pool ' ~ dhcp_server.pool_name) -%}
-            {%- set _ = cmds.append('network ' ~ vlan.network ~ ' ' ~ vlan.netmask) -%}
-            {%- set _ = cmds.append('default-router ' ~ dhcp_server.default_router) -%}
-            {%- set _ = cmds.append('dns-server ' ~ dhcp_server.dns) -%}
-            {%- set _ = cmds.append('exit') -%}
+            {%- set _ = cmds.append(' network ' ~ vlan.network ~ ' ' ~ vlan.netmask) -%}
+            {%- set _ = cmds.append(' default-router ' ~ dhcp_server.default_router) -%}
+            {%- set _ = cmds.append(' dns-server ' ~ dhcp_server.dns) -%}
             {%- set _ = cmds.append('ip route ' ~ vlan.network ~ ' ' ~ vlan.netmask ~ ' ' ~ dhcp_server.route_next_hop) -%}
           {%- else -%}
             {%- set _ = cmds.append('vlan ' ~ vlan.id | string) -%}
-            {%- set _ = cmds.append('name ' ~ vlan.name) -%}
+            {%- set _ = cmds.append(' name ' ~ vlan.name) -%}
             {%- set _ = cmds.append('interface Vlan' ~ vlan.id | string) -%}
             {%- if inventory_hostname in core_switches | default({}) -%}
               {%- set dev = core_switches[inventory_hostname] -%}
-              {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+              {%- set _ = cmds.append(' ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
               {%- if dev.helper_address is defined -%}
-                {%- set _ = cmds.append('ip helper-address ' ~ dev.helper_address) -%}
+                {%- set _ = cmds.append(' ip helper-address ' ~ dev.helper_address) -%}
               {%- endif -%}
-              {%- set _ = cmds.append('no shutdown') -%}
+              {%- set _ = cmds.append(' no shutdown') -%}
               {%- if dev.routing_protocols.ospf is defined -%}
                 {%- set _ = cmds.append('router ospf ' ~ dev.routing_protocols.ospf.process_id | string) -%}
                 {%- for net in dev.routing_protocols.ospf.networks -%}
-                  {%- set _ = cmds.append('network ' ~ net ~ ' area ' ~ dev.routing_protocols.ospf.area | string) -%}
+                  {%- set _ = cmds.append(' network ' ~ net ~ ' area ' ~ dev.routing_protocols.ospf.area | string) -%}
                 {%- endfor -%}
                 {%- if dev.redistribute | default(false) -%}
-                  {%- set _ = cmds.append('redistribute rip subnets') -%}
+                  {%- set _ = cmds.append(' redistribute rip subnets') -%}
                 {%- endif -%}
               {%- endif -%}
               {%- if dev.routing_protocols.rip is defined -%}
                 {%- set _ = cmds.append('router rip') -%}
-                {%- set _ = cmds.append('version ' ~ dev.routing_protocols.rip.version | string) -%}
+                {%- set _ = cmds.append(' version ' ~ dev.routing_protocols.rip.version | string) -%}
                 {%- for net in dev.routing_protocols.rip.networks -%}
-                  {%- set _ = cmds.append('network ' ~ net) -%}
+                  {%- set _ = cmds.append(' network ' ~ net) -%}
                 {%- endfor -%}
                 {%- if dev.redistribute | default(false) -%}
-                  {%- set _ = cmds.append('redistribute ospf 1 metric 2') -%}
+                  {%- set _ = cmds.append(' redistribute ospf 1 metric 2') -%}
                 {%- endif -%}
               {%- endif -%}
             {%- elif inventory_hostname in distribution_switches | default({}) -%}
               {%- set dev = distribution_switches[inventory_hostname] -%}
-              {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
-              {%- set _ = cmds.append('no shutdown') -%}
+              {%- set _ = cmds.append(' ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+              {%- set _ = cmds.append(' no shutdown') -%}
               {%- if dev.routing_protocols.rip is defined -%}
                 {%- set _ = cmds.append('router rip') -%}
-                {%- set _ = cmds.append('version ' ~ dev.routing_protocols.rip.version | string) -%}
+                {%- set _ = cmds.append(' version ' ~ dev.routing_protocols.rip.version | string) -%}
                 {%- for net in dev.routing_protocols.rip.networks -%}
-                  {%- set _ = cmds.append('network ' ~ net) -%}
+                  {%- set _ = cmds.append(' network ' ~ net) -%}
                 {%- endfor -%}
               {%- endif -%}
             {%- elif inventory_hostname in access_switches | default({}) -%}
               {%- set dev = access_switches[inventory_hostname] -%}
-              {%- set _ = cmds.append('ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
-              {%- set _ = cmds.append('no shutdown') -%}
+              {%- set _ = cmds.append(' ip address ' ~ dev.svi_ip ~ ' ' ~ vlan.netmask) -%}
+              {%- set _ = cmds.append(' no shutdown') -%}
             {%- endif -%}
           {%- endif -%}
           {{ cmds | to_json }}

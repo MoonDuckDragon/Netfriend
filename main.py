@@ -158,8 +158,29 @@ def perform_discovery():
                 "id": hostname,
                 "ip_map": ip_map,
                 "type": "router" if hostname in ["R3", "R4"] else "switch",
-                "routing": routing_protocols
+                "routing": routing_protocols,
+                "ospf_ips": [],
+                "rip_ips": []
             }
+
+            if "OSPF" in routing_protocols:
+                try:
+                    ospf_out = connection.send_command("show ip ospf neighbor")
+                    for line in ospf_out.splitlines():
+                        parts = line.split()
+                        if len(parts) >= 6 and ("FULL" in parts[2] or "2WAY" in parts[2]):
+                            discovered_nodes[hostname]["ospf_ips"].append(parts[4])
+                except: pass
+
+            if "RIP" in routing_protocols:
+                try:
+                    rip_out = connection.send_command("show ip route rip")
+                    for line in rip_out.splitlines():
+                        if "via" in line:
+                            match = re.search(r'via\s+([\d\.]+)', line)
+                            if match:
+                                discovered_nodes[hostname]["rip_ips"].append(match.group(1))
+                except: pass
             
             cdp_out = connection.send_command("show cdp neighbors detail")
             connection.disconnect()
@@ -179,9 +200,9 @@ def perform_discovery():
                         
                         if target_dev and local_port and remote_port:
                             if target_dev not in discovered_nodes:
-                                discovered_nodes[target_dev] = {"id": target_dev, "ip_map": {"routed":[]}, "type": "unknown", "routing": []}
+                                discovered_nodes[target_dev] = {"id": target_dev, "ip_map": {"routed":[]}, "type": "unknown", "routing": [], "ospf_ips": [], "rip_ips": []}
                             
-                            link_pair = tuple(sorted([hostname, target_dev]))
+                            link_pair = tuple(sorted([hostname, target_dev, "CDP"]))
                             if link_pair not in edge_tracker:
                                 edge_tracker.add(link_pair)
                                 
@@ -191,12 +212,46 @@ def perform_discovery():
                                     "from": hostname, "to": target_dev,
                                     "from_port": local_port, "to_port": remote_port,
                                     "vlan": link_vlan,
+                                    "type": "CDP",
                                     "label": f"{hostname}({local_port})\n ↕ \n{target_dev}({remote_port})"
                                 })
                             target_dev = None
         except Exception as e:
             print(f"Error on {hostname} discovery: {e}")
             
+    # L3 OSPF/RIP 논리 엣지 생성
+    ip_to_host = {}
+    for host, data in discovered_nodes.items():
+        for vlan, ips in data.get("ip_map", {}).items():
+            if isinstance(ips, list):
+                for ip in ips: ip_to_host[ip] = host
+            else:
+                ip_to_host[ips] = host
+
+    for host, data in discovered_nodes.items():
+        for ospf_ip in data.get("ospf_ips", []):
+            target = ip_to_host.get(ospf_ip)
+            if target and target != host:
+                link_pair = tuple(sorted([host, target, "OSPF"]))
+                if link_pair not in edge_tracker:
+                    edge_tracker.add(link_pair)
+                    discovered_edges.append({
+                        "from": host, "to": target,
+                        "type": "OSPF", "vlan": "routed",
+                        "label": "OSPF"
+                    })
+        for rip_ip in data.get("rip_ips", []):
+            target = ip_to_host.get(rip_ip)
+            if target and target != host:
+                link_pair = tuple(sorted([host, target, "RIP"]))
+                if link_pair not in edge_tracker:
+                    edge_tracker.add(link_pair)
+                    discovered_edges.append({
+                        "from": host, "to": target,
+                        "type": "RIP", "vlan": "routed",
+                        "label": "RIP"
+                    })
+
     nodes_list = list(discovered_nodes.values())
     vlans_list = sorted(list(all_vlans), key=lambda x: int(x) if x.isdigit() else 999)
     subnets_list = sorted(list(all_subnets))
@@ -356,7 +411,6 @@ def do_cli(req: CliReq):
             output = conn.send_command_timing(cmd, strip_command=True, strip_prompt=True)
             output = output.replace('^@', '').replace('\x00', '')
             
-            # 입력한 명령어가 출력 앞에 붙어나오면 제거
             if output.startswith(cmd):
                 output = output[len(cmd):].lstrip()
         else:

@@ -75,7 +75,8 @@
       cisco.ios.ios_config:
         lines: "{{ cmd_list }}"
       vars:
-        ansible_command_timeout: 60
+        ansible_command_timeout: 120
+        ansible_connect_timeout: 120
       when: inventory_hostname in ['R3', 'SW4', 'SW5']
 
     - name: Apply Telnet config
@@ -84,7 +85,9 @@
         password: "{{ ansible_password | string }}"
         login_prompt: "Username: ?"
         password_prompt: "Password: ?"
-        prompts: ["[>#]"]
-        timeout: 45
-        command: "{{ ['enable', ansible_password | string, 'conf t', 'no logging console'] + cmd_list + ['end', 'write memory', 'conf t', 'logging console', 'end'] }}"
+        prompts: 
+          - "[>#]"
+          - "Password:"
+        timeout: 120
+        command: "{{ ['enable', ansible_password | string, 'terminal length 0', 'conf t', 'no logging console'] + cmd_list + ['end', 'write memory', 'conf t', 'logging console', 'end'] }}"
       when: inventory_hostname in ['SW2', 'SW6', 'SW8']

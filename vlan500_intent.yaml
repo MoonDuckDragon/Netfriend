@@ -1,65 +1,68 @@
 # filename: vlan500_intent.yaml
-# VLAN 500 NetDevOps SSoT (Single Source of Truth)
-# R3, R4 제외. SW4,5(모던)와 SW2,6(레거시) 라우팅 연동 목적.
-
+---
 vlan:
   id: 500
-  name: "NetDevOps_VLAN"
-  network: "10.0.50.0"
-  netmask: "255.255.255.0"
+  name: NetDevOps_VLAN
+  netmask: 255.255.255.0
+  network: 10.50.50.0
 
-# OSPF + RIPv2 병행 및 재분배 (ASBR 역할)
+dhcp_server:
+  hostname: R3
+  pool_name: VLAN500_POOL
+  exclude_start: 10.50.50.1
+  exclude_end: 10.50.50.10
+  default_router: 10.50.50.4
+  dns: 8.8.8.8
+  route_next_hop: 10.1.1.14
+
 core_switches:
   SW4:
-    svi_ip: "10.0.50.4"
+    svi_ip: 10.50.50.4
+    helper_address: 10.1.1.9
     routing_protocols:
       ospf:
         process_id: 1
         area: 0
         networks:
-          - "10.0.50.0 0.0.0.255"
-          - "10.0.1.0 0.0.0.255"  # SW4-SW5 OSPF 네이버 구성용 추가
+          - '10.50.50.0 0.0.0.255'
+          - '10.0.1.0 0.0.0.255'
       rip:
         version: 2
         networks:
-          - "10.0.0.0"
+          - '10.0.0.0'
     redistribute: true
-
   SW5:
-    svi_ip: "10.0.50.5"
+    svi_ip: 10.50.50.5
+    helper_address: 10.1.1.9
     routing_protocols:
       ospf:
         process_id: 1
         area: 0
         networks:
-          - "10.0.50.0 0.0.0.255"
-          - "10.0.1.0 0.0.0.255"  # SW4-SW5 OSPF 네이버 구성용 추가
+          - '10.50.50.0 0.0.0.255'
+          - '10.0.1.0 0.0.0.255'
       rip:
         version: 2
         networks:
-          - "10.0.0.0"
+          - '10.0.0.0'
     redistribute: true
 
-# RIPv2 전용 (레거시)
 distribution_switches:
   SW2:
-    svi_ip: "10.0.50.2"
+    svi_ip: 10.50.50.2
     routing_protocols:
       rip:
         version: 2
         networks:
-          - "10.0.0.0"
-
+          - '10.0.0.0'
   SW6:
-    svi_ip: "10.0.50.6"
+    svi_ip: 10.50.50.6
     routing_protocols:
       rip:
         version: 2
         networks:
-          - "10.0.0.0"
+          - '10.0.0.0'
 
-# 라우팅 안 하는 L2 단순 접근용
 access_switches:
   SW8:
-    svi_ip: "10.0.50.8"
-    routing_protocols: none
+    svi_ip: 10.50.50.8

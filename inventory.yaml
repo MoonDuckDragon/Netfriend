@@ -42,7 +42,7 @@ all:
         SW6:
           ansible_host: 10.254.254.16
         SW8:
-          ansible_host: 10.254.254.18
+          ansible_host: 192.168.40.18
       vars:
         ansible_connection: local
         ansible_user: ansible

@@ -1,6 +1,5 @@
 # filename: snmp_config.yaml
 ---
-# 에러 난 R3, R4, SW8 제외하고 통신 되는 애들만 지정
 - name: Deploy SNMP Trap Configuration
   hosts: SW2,SW4,SW5,SW6
   gather_facts: false
